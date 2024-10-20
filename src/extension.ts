@@ -32,6 +32,7 @@ export async function deactivate(): Promise<void> {
 export async function restartServer(): Promise<void> {
   await extensionRuntime?.restart();
 }
+
 class ExtensionRuntime {
   private readonly installer: DafnyInstaller;
   private client?: DafnyLanguageClient;

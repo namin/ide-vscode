@@ -4,6 +4,7 @@ import CompileCommands from './compileCommands';
 import CounterexamplesView from './counterExamplesView';
 import DafnyVersionView from './dafnyVersionView';
 import GhostDiagnosticsView from './ghostDiagnosticsView';
+import GenerateCommands from './generateCommands';
 import VerificationGutterStatusView from './verificationGutterStatusView';
 import RelatedErrorView from './relatedErrorView';
 import VerificationSymbolStatusView from './verificationSymbolStatusView';
@@ -28,6 +29,7 @@ export default function createAndRegisterDafnyIntegration(
   CompileCommands.createAndRegister(installer);
   RelatedErrorView.createAndRegister(installer.context, languageClient);
   DafnyVersionView.createAndRegister(installer, languageServerVersion);
+  GenerateCommands.createAndRegister(installer, languageClient);
 }
 
 export function configuredVersionToNumeric(version: string): number {

@@ -8,6 +8,7 @@ export namespace DafnyCommands {
   export const CopyCounterexamples = 'dafny.copyCounterexamples';
   export const OpenStatusBarMenu = 'dafny.openStatusBarMenu';
   export const RestartServer = 'dafny.restartServer';
+  export const GenerateInductiveProofSketch = 'dafny.generateInductiveProofSketch';
 }
 
 export namespace VSCodeCommands {

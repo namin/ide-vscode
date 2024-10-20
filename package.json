@@ -36,6 +36,12 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "dafny.generateInductiveProofSketch",
+          "when": "editorLangId == dafny"
+        }
+      ],
       "editor/context": [
         {
           "when": "editorTextFocus && editorLangId == dafny",
@@ -311,6 +317,10 @@
       {
         "command": "dafny.restartServer",
         "title": "Dafny: Restart server"
+      },
+      {
+        "command": "dafny.generateInductiveProofSketch",
+        "title": "Dafny: Generate Inductive Proof Sketch"
       }
     ]
   },

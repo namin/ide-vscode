@@ -1,4 +1,5 @@
-import { Disposable, Uri, Diagnostic, EventEmitter, Event } from 'vscode';
+import { window, commands } from 'vscode';
+import { Disposable, Uri, Diagnostic, EventEmitter, Event, Selection } from 'vscode';
 import { HandleDiagnosticsSignature, LanguageClient, LanguageClientOptions, ServerOptions, TextDocumentPositionParams } from 'vscode-languageclient/node';
 
 import Configuration from '../configuration';
@@ -6,6 +7,8 @@ import { ConfigurationConstants } from '../constants';
 import { DafnyDocumentFilter } from '../tools/vscode';
 import { ICompilationStatusParams, IVerificationCompletedParams, IVerificationStartedParams } from './api/compilationStatus';
 import { ICounterexampleItem, ICounterexampleParams } from './api/counterExample';
+import { IProofSketchParams } from './api/proofSketchParams';
+import { IProofSketchResponse } from './api/proofSketchResponse';
 import { IGhostDiagnosticsParams } from './api/ghostDiagnostics';
 import { IVerificationGutterStatusParams as IVerificationGutterStatusParams } from './api/verificationGutterStatusParams';
 import { IVerificationSymbolStatusParams } from './api/verificationSymbolStatusParams';
@@ -210,5 +213,47 @@ export class DafnyLanguageClient extends LanguageClient {
 
   public cancelVerification(params: TextDocumentPositionParams): Promise<boolean> {
     return this.sendRequest<boolean>('dafny/textDocument/cancelVerifySymbol', params);
+  }
+
+  public async generateInductiveProofSketch(params: IProofSketchParams): Promise<IProofSketchResponse> {
+    const editor = window.activeTextEditor;
+
+    if(!editor) {
+      window.showErrorMessage('No active editor found.');
+      return Promise.reject('No active editor');
+    }
+
+    const response = await this.sendRequest<IProofSketchResponse>('dafny/inductiveProofSketch', params);
+
+    if(response == null || response.sketch == null) {
+      window.showErrorMessage('No proof sketch generated.');
+      return Promise.reject('No proof sketch');
+    }
+
+    const sketchText = response.sketch;
+
+    // Remember the current cursor position before inserting the sketch
+    const startPosition = editor.selection.active;
+
+    // Insert the sketch into the editor at the current cursor position
+    editor.edit(editBuilder => {
+      const position = editor.selection.active; // Get the current cursor position
+      editBuilder.insert(position, sketchText);
+    });
+
+    // Get the new cursor position after the sketch is inserted
+    const endPosition = editor.selection.active;
+
+    // Create a selection from the start of the sketch to the end
+    const sketchRange = new Selection(startPosition, endPosition);
+
+    // Set the editor selection to the range of the inserted sketch
+    editor.selection = sketchRange;
+
+    // Trigger VSCode's format selection command to format only the proof sketch
+    await commands.executeCommand('editor.action.formatSelection');
+
+    window.showInformationMessage('Proof sketch inserted into the editor.');
+    return response;
   }
 }
