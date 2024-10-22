@@ -27,7 +27,6 @@ export default class GenerateCommands {
         //if(!await document.save()) {
         //  return null;
         //}
-        window.showInformationMessage('client.generate');
         return client.generateInductiveProofSketch({ position: position, textDocument: { uri: document.uri!.toString() } });
       }));
     return new GenerateCommands();
