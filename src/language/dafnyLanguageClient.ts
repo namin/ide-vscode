@@ -215,7 +215,7 @@ export class DafnyLanguageClient extends LanguageClient {
     return this.sendRequest<boolean>('dafny/textDocument/cancelVerifySymbol', params);
   }
 
-  public async generateInductiveProofSketch(params: IProofSketchParams): Promise<IProofSketchResponse> {
+  public async generateProofSketch(params: IProofSketchParams): Promise<IProofSketchResponse> {
     const editor = window.activeTextEditor;
 
     if(!editor) {
@@ -223,7 +223,7 @@ export class DafnyLanguageClient extends LanguageClient {
       return Promise.reject('No active editor');
     }
 
-    const response = await this.sendRequest<IProofSketchResponse>('dafny/inductiveProofSketch', params);
+    const response = await this.sendRequest<IProofSketchResponse>('dafny/proofSketch', params);
 
     if(response == null || response.sketch == null) {
       window.showErrorMessage('No proof sketch generated.');

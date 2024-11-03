@@ -9,6 +9,7 @@ export namespace DafnyCommands {
   export const OpenStatusBarMenu = 'dafny.openStatusBarMenu';
   export const RestartServer = 'dafny.restartServer';
   export const GenerateInductiveProofSketch = 'dafny.generateInductiveProofSketch';
+  export const GenerateConditionAssertionProofSketch = 'dafny.generateConditionAssertionProofSketch';
 }
 
 export namespace VSCodeCommands {
