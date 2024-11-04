@@ -38,11 +38,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "dafny.generateInductiveProofSketch",
-          "when": "editorLangId == dafny"
-        },
-        {
-          "command": "dafny.generateConditionAssertionProofSketch",
+          "command": "dafny.generateProofSketch",
           "when": "editorLangId == dafny"
         }
       ],
@@ -323,12 +319,8 @@
         "title": "Dafny: Restart server"
       },
       {
-        "command": "dafny.generateInductiveProofSketch",
-        "title": "Dafny: Generate Inductive Proof Sketch"
-      },
-      {
-        "command": "dafny.generateConditionAssertionProofSketch",
-        "title": "Dafny: Generate Condition Assertion Proof Sketch"
+        "command": "dafny.generateProofSketch",
+        "title": "Dafny: Generate Proof Sketch"
       }
     ]
   },

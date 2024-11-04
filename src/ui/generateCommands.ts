@@ -4,24 +4,20 @@ import { DafnyLanguageClient } from '../language/dafnyLanguageClient';
 import { DafnyInstaller } from '../language/dafnyInstallation';
 import { DafnyCommands, VSCodeCommands } from '../commands';
 
-import { SketchType } from '../language/api/proofSketchParams';
-
 export default class GenerateCommands {
-  private static readonly map: { [key: string]: SketchType } = {
-    [DafnyCommands.GenerateInductiveProofSketch]: SketchType.Inductive,
-    [DafnyCommands.GenerateConditionAssertionProofSketch]: SketchType.Assertions
-  };
   public static createAndRegister(installer: DafnyInstaller, client: DafnyLanguageClient): GenerateCommands {
-    for(const [ name, type ] of Object.entries(GenerateCommands.map)) {
-      GenerateCommands.RegisterCommand(installer, client, name, type);
-    }
+    installer.context.subscriptions.push(commands.registerCommand(
+      DafnyCommands.GenerateProofSketch,
+      () => GenerateCommands.CreateCommand(client)));
     return new GenerateCommands();
   }
-  private static RegisterCommand(installer: DafnyInstaller, client: DafnyLanguageClient, name: string, type: SketchType) {
-    installer.context.subscriptions.push(commands.registerCommand(name,
-      () => GenerateCommands.CreateCommand(client, type)));
-  }
-  private static async CreateCommand(client: DafnyLanguageClient, sketchType: SketchType) {
+  private static async CreateCommand(client: DafnyLanguageClient) {
+    const sketchType = await window.showInputBox({
+      placeHolder: 'Sketch type:'
+    });
+    if(sketchType === undefined) {
+      return null;
+    }
     const editor = window.activeTextEditor;
     if(editor == null) {
       window.showInformationMessage('editor is null');
