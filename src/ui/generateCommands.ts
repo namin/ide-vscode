@@ -12,10 +12,12 @@ export default class GenerateCommands {
     return new GenerateCommands();
   }
   private static async CreateCommand(client: DafnyLanguageClient) {
-    const sketchType = await window.showInputBox({
-      placeHolder: 'Sketch type:'
+    const sketchTypes = await client.getProofSketchTypes();
+    const sketchType = await window.showQuickPick(sketchTypes, {
+      placeHolder: 'Select a sketch type',
+      canPickMany: false
     });
-    if(sketchType === undefined) {
+    if(sketchType == null) {
       return null;
     }
     const editor = window.activeTextEditor;

@@ -215,6 +215,11 @@ export class DafnyLanguageClient extends LanguageClient {
     return this.sendRequest<boolean>('dafny/textDocument/cancelVerifySymbol', params);
   }
 
+  public async getProofSketchTypes(): Promise<string[]> {
+    const response = await this.sendRequest<{ types: string[] }>('dafny/proofSketchTypeList');
+    return response.types;
+  }
+
   public async generateProofSketch(params: IProofSketchParams): Promise<IProofSketchResponse> {
     const editor = window.activeTextEditor;
 
