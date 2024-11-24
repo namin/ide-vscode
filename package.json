@@ -321,6 +321,10 @@
       {
         "command": "dafny.generateProofSketch",
         "title": "Dafny: Generate Proof Sketch"
+      },
+      {
+        "command": "dafny.aiCompletion",
+        "title": "Dafny: Generate AI Completion"
       }
     ]
   },

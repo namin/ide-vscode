@@ -11,6 +11,7 @@ export namespace DafnyCommands {
   export const GenerateProofSketch = 'dafny.generateProofSketch';
   export const GenerateInductiveProofSketch = 'dafny.generateInductiveProofSketch';
   export const GenerateConditionAssertionProofSketch = 'dafny.generateConditionAssertionProofSketch';
+  export const GenerateAiCompletion = 'dafny.aiCompletion';
 }
 
 export namespace VSCodeCommands {
