@@ -38,7 +38,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "dafny.generateProofSketch",
+          "command": "dafny.generateSketch",
           "when": "editorLangId == dafny"
         }
       ],
@@ -319,12 +319,8 @@
         "title": "Dafny: Restart server"
       },
       {
-        "command": "dafny.generateProofSketch",
-        "title": "Dafny: Generate Proof Sketch"
-      },
-      {
-        "command": "dafny.aiCompletion",
-        "title": "Dafny: Generate AI Completion"
+        "command": "dafny.generateSketch",
+        "title": "Dafny: Generate Sketch"
       }
     ]
   },

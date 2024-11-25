@@ -7,8 +7,8 @@ import { ConfigurationConstants } from '../constants';
 import { DafnyDocumentFilter } from '../tools/vscode';
 import { ICompilationStatusParams, IVerificationCompletedParams, IVerificationStartedParams } from './api/compilationStatus';
 import { ICounterexampleItem, ICounterexampleParams } from './api/counterExample';
-import { IProofSketchParams } from './api/proofSketchParams';
-import { IProofSketchResponse } from './api/proofSketchResponse';
+import { ISketchParams } from './api/sketchParams';
+import { ISketchResponse } from './api/sketchResponse';
 import { IGhostDiagnosticsParams } from './api/ghostDiagnostics';
 import { IVerificationGutterStatusParams as IVerificationGutterStatusParams } from './api/verificationGutterStatusParams';
 import { IVerificationSymbolStatusParams } from './api/verificationSymbolStatusParams';
@@ -215,12 +215,12 @@ export class DafnyLanguageClient extends LanguageClient {
     return this.sendRequest<boolean>('dafny/textDocument/cancelVerifySymbol', params);
   }
 
-  public async getProofSketchTypes(): Promise<string[]> {
-    const response = await this.sendRequest<{ types: string[] }>('dafny/proofSketchTypeList');
+  public async getSketchTypes(): Promise<string[]> {
+    const response = await this.sendRequest<{ types: string[] }>('dafny/sketchTypeList');
     return response.types;
   }
 
-  public async generateProofSketch(params: IProofSketchParams): Promise<IProofSketchResponse> {
+  public async generateSketch(params: ISketchParams): Promise<ISketchResponse> {
     const editor = window.activeTextEditor;
 
     if(!editor) {
@@ -228,11 +228,11 @@ export class DafnyLanguageClient extends LanguageClient {
       return Promise.reject('No active editor');
     }
 
-    const response = await this.sendRequest<IProofSketchResponse>('dafny/proofSketch', params);
+    const response = await this.sendRequest<ISketchResponse>('dafny/sketch', params);
 
     if(response == null || response.sketch == null) {
-      window.showErrorMessage('No proof sketch generated.');
-      return Promise.reject('No proof sketch');
+      window.showErrorMessage('No sketch generated.');
+      return Promise.reject('No sketch');
     }
 
     const sketchText = response.sketch;
@@ -255,10 +255,10 @@ export class DafnyLanguageClient extends LanguageClient {
     // Set the editor selection to the range of the inserted sketch
     editor.selection = sketchRange;
 
-    // Trigger VSCode's format selection command to format only the proof sketch
+    // Trigger VSCode's format selection command to format only the sketch
     await commands.executeCommand('editor.action.formatSelection');
 
-    window.showInformationMessage('Proof sketch inserted into the editor.');
+    window.showInformationMessage('Sketch inserted into the editor.');
     return response;
   }
 }
