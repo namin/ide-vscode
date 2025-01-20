@@ -3,21 +3,25 @@ import { DafnyLanguageClient } from '../language/dafnyLanguageClient';
 
 import { DafnyInstaller } from '../language/dafnyInstallation';
 import { DafnyCommands, VSCodeCommands } from '../commands';
+import { ExtensionContext } from 'vscode';
 
 export default class GenerateCommands {
   public static createAndRegister(installer: DafnyInstaller, client: DafnyLanguageClient): GenerateCommands {
     installer.context.subscriptions.push(commands.registerCommand(
       DafnyCommands.GenerateSketch,
-      () => GenerateCommands.CreateCommand(client)));
+      (args?: { sketchType: string }) => GenerateCommands.CreateCommand(client, args?.sketchType)));
     return new GenerateCommands();
   }
 
-  private static async CreateCommand(client: DafnyLanguageClient) {
-    const sketchTypes = await client.getSketchTypes();
-    const sketchType = await window.showQuickPick(sketchTypes, {
-      placeHolder: 'Select a sketch type',
-      canPickMany: false
-    });
+  private static async CreateCommand(client: DafnyLanguageClient, preselectedType?: string) {
+    const sketchType = preselectedType ?? await (async () => {
+      const sketchTypes = await client.getSketchTypes();
+      return window.showQuickPick(sketchTypes, {
+        placeHolder: 'Select a sketch type',
+        canPickMany: false
+      });
+    })();
+
     if(sketchType == null) {
       return null;
     }

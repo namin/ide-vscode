@@ -1,4 +1,4 @@
-import { window, commands } from 'vscode';
+import { window, commands, env } from 'vscode';
 import { Disposable, Uri, Diagnostic, EventEmitter, Event, Selection } from 'vscode';
 import { HandleDiagnosticsSignature, LanguageClient, LanguageClientOptions, ServerOptions, TextDocumentPositionParams } from 'vscode-languageclient/node';
 
@@ -221,13 +221,6 @@ export class DafnyLanguageClient extends LanguageClient {
   }
 
   public async generateSketch(params: ISketchParams): Promise<ISketchResponse> {
-    const editor = window.activeTextEditor;
-
-    if(!editor) {
-      window.showErrorMessage('No active editor found.');
-      return Promise.reject('No active editor');
-    }
-
     const response = await this.sendRequest<ISketchResponse>('dafny/sketch', params);
 
     if(response == null || response.sketch == null) {
@@ -237,28 +230,9 @@ export class DafnyLanguageClient extends LanguageClient {
 
     const sketchText = response.sketch;
 
-    // Remember the current cursor position before inserting the sketch
-    const startPosition = editor.selection.active;
+    await env.clipboard.writeText(sketchText);
 
-    // Insert the sketch into the editor at the current cursor position
-    editor.edit(editBuilder => {
-      const position = editor.selection.active; // Get the current cursor position
-      editBuilder.insert(position, sketchText);
-    });
-
-    // Get the new cursor position after the sketch is inserted
-    const endPosition = editor.selection.active;
-
-    // Create a selection from the start of the sketch to the end
-    const sketchRange = new Selection(startPosition, endPosition);
-
-    // Set the editor selection to the range of the inserted sketch
-    editor.selection = sketchRange;
-
-    // Trigger VSCode's format selection command to format only the sketch
-    await commands.executeCommand('editor.action.formatSelection');
-
-    window.showInformationMessage('Sketch inserted into the editor.');
+    window.showInformationMessage('Sketch copied to clipboard.');
     return response;
   }
 }
