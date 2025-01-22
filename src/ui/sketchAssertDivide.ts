@@ -71,7 +71,7 @@ export default class SketchAssertDivide {
     }
 
     // Insert it and trigger verification
-    await this.insertAssertion(editor, intermediate, state.targetAssertion.line);
+    await this.insertAssertion(client, editor, intermediate, state.targetAssertion.line);
     // Update line numbers since we inserted above
     state.targetAssertion.line++;
     intermediate.line = state.targetAssertion.line - 1;
@@ -134,20 +134,22 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
   }
 
   private static async insertAssertion(
+    client: DafnyLanguageClient,
     editor: TextEditor,
     assertion: { line: number, assertion: string },
     line: number
   ): Promise<void> {
-    const workspaceEdit = new WorkspaceEdit();
-    workspaceEdit.insert(
+    const edit = new WorkspaceEdit();
+    edit.insert(
       editor.document.uri,
       new Position(line, 0),
       `    assert ${assertion.assertion}; // Intermediate step\n`
     );
-    await workspace.applyEdit(workspaceEdit);
+    await this.applyEdit(client, editor, edit);
   }
 
   private static async commentOutLine(
+    client: DafnyLanguageClient,
     editor: TextEditor,
     line: number
   ): Promise<void> {
@@ -155,14 +157,20 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     const document = editor.document;
     const lineText = document.lineAt(line).text;
     const uri = document.uri;
-    
+
     edit.replace(
       uri,
       new Range(new Position(line, 0), new Position(line, lineText.length)),
-      `// ${lineText}`  // Add comment prefix
+      `// ${lineText}` // Add comment prefix
     );
-  
+
+    await this.applyEdit(client, editor, edit);
+  }
+
+  private static async applyEdit(client: DafnyLanguageClient, editor: TextEditor, edit: WorkspaceEdit) {
     await workspace.applyEdit(edit);
+    await editor.document.save();
+    await commands.executeCommand(DafnyCommands.Build);
   }
 
   private static async handleDiagnosticsChange(client: DafnyLanguageClient) {
@@ -228,7 +236,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
         } else {
           // Need to try a different intermediate assertion
           this.outputChannel.appendLine('Intermediate assertion failed to verify or help, trying again');
-          this.commentOutLine(editor, state.attempt.line);
+          this.commentOutLine(client, editor, state.attempt.line);
           await this.tryAssertStep(client, editor, docKey);
         }
       }
