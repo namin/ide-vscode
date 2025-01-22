@@ -58,8 +58,11 @@ export default class GenerateCommands {
 
     // Insert it and trigger verification
     await this.insertAssertion(editor, intermediate, state.targetAssertion.line);
-    state.attempt = intermediate;
-    await commands.executeCommand(DafnyCommands.Build);
+    // Update line numbers since we inserted above
+    state.targetAssertion.line++;
+      intermediate.line = state.targetAssertion.line - 1;
+      state.attempt = intermediate;
+      await commands.executeCommand(DafnyCommands.Build);
     // Further progress handled by diagnostic change
   }
 
@@ -70,7 +73,7 @@ export default class GenerateCommands {
   ): Promise<{line: number, assertion: string} | null> {
     const context = await this.getAssertionContext(editor, state.targetAssertion.line);
     
-    const prompt = `Given the following Dafny verification context, suggest a logically necessary intermediate assertion that would help prove the target assertion. The intermediate assertion should be simpler than the target and follow from the context.
+    const prompt = `Given the following Dafny verification context, suggest a single-line logical step that would help prove the target assertion. Your response must be exactly one assertion, no comments, no additional explanation. The assertion must be simpler than the target and follow directly from the context.
 
 Context:
 ${context}
@@ -89,9 +92,20 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
       });
 
       if (result?.sketch) {
+        // Clean and validate the response
+        let assertion = result.sketch.trim();
+        // Remove any 'assert' or semicolon if AI included them
+        assertion = assertion.replace(/^assert\s+/, '').replace(/;$/, '');
+        
+        // Check for multiple lines or assertions
+        if (assertion.includes('\n') || assertion.includes(';')) {
+          this.outputChannel.appendLine('AI returned multiple lines/assertions, skipping');
+          return null;
+        }
+
         return {
           line: state.targetAssertion.line,
-          assertion: result.sketch.trim()
+          assertion: assertion
         };
       }
     } catch (e) {
@@ -138,13 +152,15 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     // Get verification status
     const diagnostics = this.diagnosticsListener.get(editor.document.uri) || [];
     const verificationErrors = new Set(
-      diagnostics
-        .filter(d => d.message.includes('could not be proved') || d.message.includes('assertion might not hold'))
-        .map(d => d.range.start.line)
+    diagnostics
+    .filter(d => d.message.includes('could not be proved') || d.message.includes('assertion might not hold'))
+    .map(d => d.range.start.line)
     );
 
-    // Check if target assertion verifies
-    if (!verificationErrors.has(state.targetAssertion.line)) {
+    this.outputChannel.appendLine(`\nDiagnostic check:\n  Target assertion at line ${state.targetAssertion.line}\n  Current attempt at line ${state.attempt?.line}\n  Verification errors at lines: ${[...verificationErrors].join(', ')}`);
+
+      // Check if target assertion verifies
+      if (!verificationErrors.has(state.targetAssertion.line)) {
       this.outputChannel.appendLine('Target assertion verified!');
       window.showInformationMessage('Assert-divide: Successfully verified target assertion!');
       this.assertDivideStates.delete(documentUri);
