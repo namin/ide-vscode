@@ -256,7 +256,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
 
   public static async handle(editor: TextEditor, document: any, client: DafnyLanguageClient): Promise<any> {
     this.outputChannel.appendLine('\n=== Starting new assert-divide operation ===');
-    this.outputChannel.show(); // Force show the output channel
+    //this.outputChannel.show(); // Force show the output channel
     window.showInformationMessage('Starting assert-divide');
     
     const assertInfo = await this.extractAssertInfo(editor);
