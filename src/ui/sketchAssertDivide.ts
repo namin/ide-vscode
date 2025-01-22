@@ -1,4 +1,4 @@
-import { window, commands, Diagnostic, TextEditor, Position, DiagnosticCollection, languages, OutputChannel, workspace, WorkspaceEdit, Range } from 'vscode';
+import { window, commands, Diagnostic, TextEditor, Position, DiagnosticCollection, languages, OutputChannel, workspace, WorkspaceEdit, Range, Uri } from 'vscode';
 import { DafnyLanguageClient } from '../language/dafnyLanguageClient';
 import { DafnyInstaller } from '../language/dafnyInstallation';
 import { DafnyCommands, VSCodeCommands } from '../commands';
@@ -41,6 +41,9 @@ export default class SketchAssertDivide {
   }
   private static docKey(document: any): string {
     return document.uri.fsPath.toString();
+  }
+  private static toUri(key: string): any {
+    return {uri: key};
   }
   
 
@@ -106,7 +109,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
         content: content,
         sketchType: 'ai_whole',
         position: new Position(state.targetAssertion.line, 0),
-        textDocument: {uri: editor.document.uri.fsPath}
+        textDocument: this.toUri(this.docKey(editor.document))
       });
 
       if(result?.sketch) {
@@ -139,13 +142,15 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     assertion: { line: number, assertion: string },
     line: number
   ): Promise<void> {
+    const activeEditor = await this.focusDocument(editor);
     const edit = new WorkspaceEdit();
+    const lineText = activeEditor.document.lineAt(line).text;
     edit.insert(
-      editor.document.uri,
+      activeEditor.document.uri,
       new Position(line, 0),
       `    assert ${assertion.assertion}; // Intermediate step\n`
     );
-    await this.applyEdit(client, editor, edit);
+    await this.applyEdit(client, activeEditor, edit);
   }
 
   private static async commentOutLine(
@@ -153,49 +158,68 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     editor: TextEditor,
     line: number
   ): Promise<void> {
+    const activeEditor = await this.focusDocument(editor);
     const edit = new WorkspaceEdit();
-    const document = editor.document;
-    const lineText = document.lineAt(line).text;
-    const uri = document.uri;
-
+    const lineText = activeEditor.document.lineAt(line).text;
     edit.replace(
-      uri,
+      activeEditor.document.uri,
       new Range(new Position(line, 0), new Position(line, lineText.length)),
       `// ${lineText}` // Add comment prefix
     );
 
-    await this.applyEdit(client, editor, edit);
+    await this.applyEdit(client, activeEditor, edit);
   }
 
+  private static async focusDocument(editor: TextEditor): Promise<TextEditor> {
+    const document = editor.document;
+    const docKey = this.docKey(document);
+    this.outputChannel.appendLine(`focus document on ${docKey}`);
+    const doc = await workspace.openTextDocument(Uri.file(docKey));
+    const activeEditor = await window.showTextDocument(doc, { preview: false });
+    return activeEditor;
+  }
   private static async applyEdit(client: DafnyLanguageClient, editor: TextEditor, edit: WorkspaceEdit) {
     await workspace.applyEdit(edit);
     await editor.document.save();
-    await commands.executeCommand(DafnyCommands.Build);
-  }
+    
+    const doc = await workspace.openTextDocument(editor.document.uri.fsPath);
+    await window.showTextDocument(doc);
+ }
 
   private static async handleDiagnosticsChange(client: DafnyLanguageClient) {
+    this.outputChannel.appendLine('...');
     const editor = window.activeTextEditor;
     if(!editor) {
       this.outputChannel.appendLine('No active editor, skipping diagnostic handling');
       return;
+    } else {
+      this.outputChannel.appendLine('Editor OK.');
     }
 
-    const docKey = this.docKey(document);
+    this.outputChannel.appendLine(`DEBUG: Checking document key...`);
+    const docKey = this.docKey(editor.document);
+    this.outputChannel.appendLine(`DEBUG: Document Key: ${docKey || "UNDEFINED"}`);
     const state = this.getAssertDivideStates(docKey);
     if(!state) {
       this.outputChannel.appendLine('handleDiagnosticChange: No state...');
       return;
+    } else {
+      this.outputChannel.appendLine('State OK.');
     }
 
     // Get verification status
+    const allDiagnostics = languages.getDiagnostics();
+    this.outputChannel.appendLine(`number of URIs with errors: ${allDiagnostics.length}`);
     const diagnostics: Diagnostic[] = [];
-    for (const [uri, uriDiagnostics] of languages.getDiagnostics()) {
-      if (uri.fsPath === docKey) {
-         this.outputChannel.appendLine(`errors for ${uri}`)
+    for(const [uri, uriDiagnostics] of allDiagnostics) {
+      if(uri.fsPath.toString() === docKey) {
+         this.outputChannel.appendLine(`${uriDiagnostics.length} errors for ${uri}`);
          uriDiagnostics.forEach(error => {
          this.outputChannel.appendLine(`l. ${error.range.start.line}: ${error.message}`);
          diagnostics.push(error);
         });
+      } else {
+        this.outputChannel.appendLine(`ignoring errors for ${uri}`);
       }
     }
 
