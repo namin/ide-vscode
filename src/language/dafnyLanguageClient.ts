@@ -216,8 +216,17 @@ export class DafnyLanguageClient extends LanguageClient {
   }
 
   public async getSketchTypes(): Promise<string[]> {
+    // Get server-side sketch types
     const response = await this.sendRequest<{ types: string[] }>('dafny/sketchTypeList');
-    return response.types;
+    const serverTypes = response.types;
+
+    // Add our IDE-specific types
+    const ideTypes = [
+      'assert_divide'  // Our new divide-and-conquer assert type
+    ];
+
+    // Combine both sets of types
+    return [...serverTypes, ...ideTypes];
   }
 
   public async generateSketch(params: ISketchParams): Promise<ISketchResponse> {
