@@ -36,6 +36,7 @@ export default class GenerateCommands {
 
   private static async tryAssertStep(client: DafnyLanguageClient, editor: TextEditor, documentUri: string) {
     const state = this.assertDivideStates.get(documentUri);
+    this.outputChannel.appendLine("URI: " + documentUri);
     if(!state) {
       return;
     }
@@ -138,6 +139,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     }
 
     const documentUri = editor.document.uri.toString();
+    this.outputChannel.appendLine("URI: " + documentUri);
     const state = this.assertDivideStates.get(documentUri);
     if(!state) {
       // Only log if we have verification errors
