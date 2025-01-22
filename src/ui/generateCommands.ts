@@ -49,6 +49,7 @@ export default class GenerateCommands {
     const state = this.getAssertDivideStates(documentUri);
     this.outputChannel.appendLine("URI: " + documentUri);
     if(!state) {
+       this.outputChannel.appendLine("tryAssertStep: No state...");
       return;
     }
 
@@ -153,6 +154,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     this.outputChannel.appendLine("URI: " + documentUri);
     const state = this.getAssertDivideStates(documentUri);
     if(!state) {
+      this.outputChannel.appendLine('handleDiagnosticChange: No state...');
       // Only log if we have verification errors
       const currentDiagnostics = this.diagnosticsListener.get(editor.document.uri) || [];
       const verificationDiagnostics = currentDiagnostics.filter(d =>
