@@ -168,6 +168,8 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
 
     // Get verification status
     const diagnostics = this.diagnosticsListener.get(editor.document.uri) || [];
+    this.outputChannel.appendLine(`All diagnostics errors: ${[...diagnostics].join(', ')}`);
+
     const verificationErrors = new Set(
       diagnostics
         .filter(d => d.message.includes('could not be proved') || d.message.includes('assertion might not hold'))
