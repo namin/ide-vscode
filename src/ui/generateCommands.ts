@@ -8,6 +8,7 @@ interface AssertDivideState {
   depth: number;
   attempt?: { line: number, assertion: string };
   verifiedAssertions: { line: number, assertion: string }[];
+  uri: string;
 }
 
 export default class GenerateCommands {
@@ -59,7 +60,7 @@ export default class GenerateCommands {
       this.deleteAssertDivideStates(documentUri);
       return;
     }
-
+ 
     state.depth++;
     this.outputChannel.appendLine(`\nTrying assert step at depth ${state.depth}`);
 
@@ -77,6 +78,7 @@ export default class GenerateCommands {
     state.targetAssertion.line++;
     intermediate.line = state.targetAssertion.line - 1;
     state.attempt = intermediate;
+
     await commands.executeCommand(DafnyCommands.Build);
     // Further progress handled by diagnostic change
   }
@@ -98,12 +100,23 @@ Target assertion: ${state.targetAssertion.assertion}
 Provide just the assertion without 'assert' keyword or semicolon.`;
 
     try {
+      const document = workspace.textDocuments.find(doc => doc.uri.fsPath === state.uri);
+      let content;
+      if (document) {
+        await document.save();
+        this.outputChannel.appendLine('Document saved before next step');
+        content = document.getText();
+      } else {
+        content = editor.document.getText();
+      }
+      this.outputChannel.appendLine("Content for AI:" + content);
+
       const result = await client.generateSketch({
         prompt,
         content: editor.document.getText(),
         sketchType: 'ai_whole',
         position: new Position(state.targetAssertion.line, 0),
-        textDocument: { uri: editor.document.uri.toString() }
+        textDocument: { uri: state.uri }
       });
 
       if(result?.sketch) {
@@ -239,15 +252,16 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     this.outputChannel.appendLine(`Found assertion: ${assertInfo.assertion} at line ${assertInfo.line}`);
 
     // Initialize state with our target assertion
-    const documentUri = document.uri.toString();
-    this.setAssertDivideStates(documentUri, {
+    const uri = document.uri.fsPath.toString();
+    this.setAssertDivideStates(uri, {
       targetAssertion: assertInfo,
       depth: 0,
-      verifiedAssertions: []
+      verifiedAssertions: [],
+      uri: uri
     });
 
     // Start the recursive process
-    await this.tryAssertStep(client, editor, documentUri);
+    await this.tryAssertStep(client, editor, uri);
     return null;
   }
 
