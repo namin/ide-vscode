@@ -7,6 +7,7 @@ interface AssertDivideState {
   attemptedLines: Set<number>;
   originalDiagnostics: Diagnostic[];
   lastGeneratedLine?: number;
+  attemptCount?: number;
 }
 
 export default class GenerateCommands {
@@ -43,19 +44,47 @@ export default class GenerateCommands {
     const documentUri = editor.document.uri.toString();
     const state = this.assertDivideStates.get(documentUri);
     if (!state) {
-      this.outputChannel.appendLine('No assert-divide state for current document, skipping');
+      // Only log if we have verification errors
+      const currentDiagnostics = this.diagnosticsListener.get(editor.document.uri) || [];
+      const verificationDiagnostics = currentDiagnostics.filter(d => 
+        d.message.includes('could not be proved') || 
+        d.message.includes('assertion might not hold'));
+      if (verificationDiagnostics.length > 0) {
+        this.outputChannel.appendLine('Got verification errors but no assert-divide state active');
+      }
       return;
     }
 
     const currentDiagnostics = this.diagnosticsListener.get(editor.document.uri) || [];
-    this.outputChannel.appendLine(`Original diagnostics count: ${state.originalDiagnostics.length}`);
-    this.outputChannel.appendLine(`Current diagnostics count: ${currentDiagnostics.length}`);
+    const verificationDiagnostics = currentDiagnostics.filter(d => 
+      d.message.includes('could not be proved') || 
+      d.message.includes('assertion might not hold'));
     
-    if (currentDiagnostics.length >= state.originalDiagnostics.length) {
-      this.outputChannel.appendLine('No improvement in diagnostics, trying next assertion...');
-      await this.tryNextAssertion(client, editor, state);
+    // Check if we have any verification errors
+    if (verificationDiagnostics.length > 0) {
+      this.outputChannel.appendLine('\nStill have verification errors:');
+      verificationDiagnostics.forEach(d => {
+        this.outputChannel.appendLine(`Error at line ${d.range.start.line + 1}: ${d.message}`);
+      });
+
+      // Increment attempt count
+      state.attemptCount = (state.attemptCount || 0) + 1;
+      
+      if (state.attemptCount > 3) {
+        this.outputChannel.appendLine('Too many attempts, stopping assert-divide');
+        window.showInformationMessage('Assert-divide: Could not find a working assertion after 3 attempts');
+        this.assertDivideStates.delete(documentUri);
+        return;
+      }
+
+      // Try AI improvement for the first failing assertion
+      const failingLine = verificationDiagnostics[0].range.start.line;
+      this.outputChannel.appendLine(`Attempting to improve assertion at line ${failingLine + 1}`);
+      await this.tryImproveAssertion(client, editor, documentUri, failingLine);
     } else {
-      this.outputChannel.appendLine('Diagnostics improved!');
+      this.outputChannel.appendLine('\nAll assertions verified!');
+      window.showInformationMessage('Assert-divide: Successfully verified!');
+      this.assertDivideStates.delete(documentUri);
     }
   }
 
@@ -85,28 +114,63 @@ export default class GenerateCommands {
     await this.generateAssertAtLine(client, editor, nextLine);
   }
 
-  private static async handleAssertDivide(editor: TextEditor, document: any): Promise<any> {
+  private static async handleAssertDivide(editor: TextEditor, document: any, client: DafnyLanguageClient): Promise<any> {
     this.outputChannel.appendLine('\n=== Starting new assert-divide operation ===');
+    this.outputChannel.show(); // Force show the output channel
     window.showInformationMessage('Starting assert-divide');
     
     const assertInfo = await this.extractAssertInfo(editor);
     if (!assertInfo) {
+      this.outputChannel.appendLine('No valid assertion found at cursor');
       return null;
     }
+    this.outputChannel.appendLine(`Found assertion: ${assertInfo.assertion} at line ${assertInfo.line}`);
 
     // Store initial state for verification feedback
     const documentUri = document.uri.toString();
     const currentDiagnostics = this.diagnosticsListener.get(document.uri) || [];
     this.outputChannel.appendLine(`Initial diagnostics count: ${currentDiagnostics.length}`);
+    
+    // Get current verification errors
+    const verificationDiagnostics = currentDiagnostics.filter(d => 
+      d.message.includes('could not be proved') || 
+      d.message.includes('assertion might not hold'));
+    
+    if (verificationDiagnostics.length === 0) {
+      this.outputChannel.appendLine('No verification errors found. Trying simple splitting first.');
+    } else {
+      this.outputChannel.appendLine(`Found ${verificationDiagnostics.length} verification errors.`);
+      verificationDiagnostics.forEach(d => {
+        this.outputChannel.appendLine(`Error at line ${d.range.start.line + 1}: ${d.message}`);
+      });
+    }
+
+    // Initialize state
     this.assertDivideStates.set(documentUri, {
-      attemptedLines: new Set([assertInfo.line]),
-      originalDiagnostics: [...currentDiagnostics]
+      attemptedLines: new Set(),  // Start empty
+      originalDiagnostics: verificationDiagnostics,
+      lastGeneratedLine: assertInfo.line,
+      attemptCount: 0
     });
 
-    await this.insertIntermediateAssertions(document, assertInfo);
-    await this.triggerVerification();
+    // Try simple && splitting first
+    const simpleAssert = assertInfo.assertion.split(' && ')[0];
+    if (simpleAssert !== assertInfo.assertion) {
+      this.outputChannel.appendLine('Found && pattern, trying simple split');
+      const workspaceEdit = new WorkspaceEdit();
+      workspaceEdit.insert(
+        document.uri,
+        new Position(assertInfo.line, 0),
+        `    assert ${simpleAssert}; // Split of &&\n`
+      );
+      await workspace.applyEdit(workspaceEdit);
+      await commands.executeCommand(DafnyCommands.Build);
+    } else {
+      // No && to split, try AI directly
+      this.outputChannel.appendLine('No && pattern found, trying AI suggestion');
+      await this.tryImproveAssertion(client, editor, documentUri, assertInfo.line);
+    }
 
-    window.showInformationMessage("Added intermediate assertions. Verifying...");
     return null;
   }
 
@@ -114,21 +178,108 @@ export default class GenerateCommands {
     const selection = editor.selection;
     const currentLine = editor.document.lineAt(selection.start.line);
     const text = currentLine.text;
+    this.outputChannel.appendLine(`Examining line: ${text}`);
 
     if (!text.trim().startsWith("assert")) {
+      this.outputChannel.appendLine("Line does not start with 'assert'");
       window.showInformationMessage("Please place cursor on an assert statement");
       return null;
     }
 
     const assertMatch = text.match(/assert\s+(.*?);/);
     if (!assertMatch) {
+      this.outputChannel.appendLine("Could not parse assertion statement");
       return null;
     }
 
+    this.outputChannel.appendLine(`Successfully extracted assertion: ${assertMatch[1]}`);
     return {
       line: selection.start.line,
-      assertion: assertMatch[1]
+      assertion: assertMatch[1].trim()
     };
+  }
+
+  private static async getAssertionContext(editor: TextEditor, line: number): Promise<string> {
+    // Get a few lines before and after for context
+    const startLine = Math.max(0, line - 5);
+    const endLine = Math.min(editor.document.lineCount, line + 5);
+    let context = '';
+
+    for (let i = startLine; i < endLine; i++) {
+      const lineText = editor.document.lineAt(i).text;
+      if (i === line) {
+        context += '>>> ' + lineText + ' <<<\n';
+      } else {
+        context += lineText + '\n';
+      }
+    }
+
+    return context;
+  }
+
+  private static async tryImproveAssertion(client: DafnyLanguageClient, editor: TextEditor, documentUri: string, line: number): Promise<void> {
+    this.outputChannel.appendLine('\nTryImproveAssertion called');
+
+    const state = this.assertDivideStates.get(documentUri);
+    if (!state || state.attemptedLines.has(line)) {
+      this.outputChannel.appendLine('Skipping line ' + line + ' - already attempted');
+      return;
+    }
+
+    const context = await this.getAssertionContext(editor, line);
+    this.outputChannel.appendLine('Got context:\n' + context);
+    
+    // Construct prompt for AI completion
+    const prompt = `Given the following Dafny verification context, suggest an intermediate assertion that would help prove the property. Focus on breaking down the complex assertion into simpler, logically necessary steps. Provide just the assertion without 'assert' keyword or semicolon.
+
+Context:
+${context}
+
+Suggestion:`;
+
+    this.outputChannel.appendLine('Sending AI prompt:\n' + prompt);
+    
+    try {
+      this.outputChannel.appendLine('Calling client.generateSketch...');
+      const result = await client.generateSketch({
+        prompt,
+        content: editor.document.getText(),
+        sketchType: 'ai',
+        position: new Position(line, 0),
+        textDocument: { uri: documentUri }
+      });
+
+      if (result?.sketch) {
+        this.outputChannel.appendLine('Got AI suggestion: ' + result.sketch);
+        state.attemptedLines.add(line);  // Add to attempted lines after getting suggestion
+        const workspaceEdit = new WorkspaceEdit();
+        workspaceEdit.insert(
+          editor.document.uri,
+          new Position(line, 0),
+          `    assert ${result.sketch}; // AI suggested\n`
+        );
+        await workspace.applyEdit(workspaceEdit);
+        await commands.executeCommand(DafnyCommands.Build);
+      } else {
+        this.outputChannel.appendLine('No sketch returned from AI');
+      }
+    } catch (e) {
+      this.outputChannel.appendLine('Error in tryImproveAssertion: ' + e);
+    }
+  }
+
+  private static async insertIntermediateAssertion(editor: TextEditor, assertion: string): Promise<void> {
+    const workspaceEdit = new WorkspaceEdit();
+    const line = editor.selection.active.line;
+    
+    workspaceEdit.insert(
+      editor.document.uri,
+      new Position(line, 0),
+      `    assert ${assertion}; // AI suggested\n`
+    );
+
+    await workspace.applyEdit(workspaceEdit);
+    await commands.executeCommand(DafnyCommands.Build);
   }
 
   private static async insertIntermediateAssertions(document: any, assertInfo: {line: number, assertion: string}): Promise<void> {
@@ -227,7 +378,7 @@ export default class GenerateCommands {
 
     // Check if this is an IDE-specific type
     if (sketchType === 'assert_divide') {
-      return await this.handleAssertDivide(editor, document);
+      return await this.handleAssertDivide(editor, document, client);
 
     }
 
