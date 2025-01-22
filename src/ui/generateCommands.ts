@@ -1,4 +1,4 @@
-import { window, commands, Diagnostic, TextEditor, Position, DiagnosticCollection, languages, OutputChannel, workspace, WorkspaceEdit } from 'vscode';
+import { window, commands, Diagnostic, TextEditor, Position, DiagnosticCollection, languages, OutputChannel, workspace, WorkspaceEdit, Range } from 'vscode';
 import { DafnyLanguageClient } from '../language/dafnyLanguageClient';
 import { DafnyInstaller } from '../language/dafnyInstallation';
 import { DafnyCommands, VSCodeCommands } from '../commands';
@@ -157,6 +157,24 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     await workspace.applyEdit(workspaceEdit);
   }
 
+  private static async commentOutLine(
+    editor: TextEditor,
+    line: number
+  ): Promise<void> {
+    const edit = new WorkspaceEdit();
+    const document = editor.document;
+    const lineText = document.lineAt(line).text;
+    const uri = document.uri;
+    
+    edit.replace(
+      uri,
+      new Range(new Position(line, 0), new Position(line, lineText.length)),
+      `// ${lineText}`  // Add comment prefix
+    );
+  
+    await workspace.applyEdit(edit);
+  }
+
   private static async handleDiagnosticsChange(client: DafnyLanguageClient) {
     const editor = window.activeTextEditor;
     if(!editor) {
@@ -227,6 +245,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
         } else {
           // Need to try a different intermediate assertion
           this.outputChannel.appendLine('Intermediate assertion failed to verify or help, trying again');
+          this.commentOutLine(editor, state.attempt.line);
           await this.tryAssertStep(client, editor, documentUri);
         }
       }
