@@ -101,7 +101,8 @@ Target assertion: ${state.targetAssertion.assertion}
 Provide just the assertion without 'assert' keyword or semicolon.`;
 
     try {
-      const content = editor.document.getText();
+      const activeEditor = await this.focusDocument(editor);
+      const content = activeEditor.document.getText();
       this.outputChannel.appendLine("Content for AI:" + content);
 
       const result = await client.generateSketch({
