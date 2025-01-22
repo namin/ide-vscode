@@ -113,8 +113,9 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
         assertion = assertion.replace(/^assert\s+/, '').replace(/;$/, '');
 
         // Check for multiple lines or assertions
-        if(assertion.includes('\n') || assertion.includes(';')) {
+        if(assertion.includes('\n')) {
           this.outputChannel.appendLine('AI returned multiple lines/assertions, skipping');
+          this.outputChannel.appendLine(assertion);
           return null;
         }
 
@@ -178,7 +179,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
 
     const verificationErrors = new Set(
       diagnostics
-        .filter(d => d.message.includes('could not be proved') || d.message.includes('assertion might not hold'))
+        //.filter(d => d.message.includes('could not be proved') || d.message.includes('assertion might not hold'))
         .map(d => d.range.start.line)
     );
 
