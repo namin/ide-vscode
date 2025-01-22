@@ -1,4 +1,4 @@
-import { window, commands, TextEditor, Position, DiagnosticCollection, languages, OutputChannel, workspace, WorkspaceEdit } from 'vscode';
+import { window, commands, Diagnostic, TextEditor, Position, DiagnosticCollection, languages, OutputChannel, workspace, WorkspaceEdit } from 'vscode';
 import { DafnyLanguageClient } from '../language/dafnyLanguageClient';
 import { DafnyInstaller } from '../language/dafnyInstallation';
 import { DafnyCommands, VSCodeCommands } from '../commands';
@@ -167,7 +167,12 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     }
 
     // Get verification status
-    const diagnostics = this.diagnosticsListener.get(editor.document.uri) || [];
+    const diagnostics: Diagnostic[] = [];
+    for (const [uri, uriDiagnostics] of languages.getDiagnostics()) {
+      uriDiagnostics.forEach(error => {
+        diagnostics.push(error);
+      });
+    }
     this.outputChannel.appendLine(`All diagnostics errors: ${[...diagnostics].join(', ')}`);
 
     const verificationErrors = new Set(
