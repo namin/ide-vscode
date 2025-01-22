@@ -1,4 +1,4 @@
-import { window, commands, Diagnostic, TextEditor, Position, DiagnosticCollection, languages, OutputChannel } from 'vscode';
+import { window, commands, Diagnostic, TextEditor, Position, DiagnosticCollection, languages, OutputChannel, workspace, WorkspaceEdit } from 'vscode';
 import { DafnyLanguageClient } from '../language/dafnyLanguageClient';
 import { DafnyInstaller } from '../language/dafnyInstallation';
 import { DafnyCommands, VSCodeCommands } from '../commands';
@@ -167,6 +167,57 @@ export default class GenerateCommands {
       });
     }
 
+    // Check if this is an IDE-specific type
+    if (sketchType === 'assert_divide') {
+      // Handle assert-divide
+      window.showInformationMessage('Starting assert-divide');
+      const selection = editor.selection;
+      
+      // Get the current assertion and its context
+      const currentLine = editor.document.lineAt(selection.start.line);
+      const text = currentLine.text;
+
+      // Check if we're on an assert statement
+      if (!text.trim().startsWith("assert")) {
+        window.showInformationMessage("Please place cursor on an assert statement");
+        return null;
+      }
+
+      // Extract the assertion expression
+      const assertMatch = text.match(/assert\s+(.*?);/);
+      if (!assertMatch) {
+        return null;
+      }
+      const assertion = assertMatch[1];
+
+      // Create a workspace edit to insert intermediate assertions
+      const workspaceEdit = new WorkspaceEdit();
+      
+      // Insert intermediate assertions with a placeholder
+      const intermediateAssert = 
+          `    // Intermediate step\n` +
+          `    assert ${assertion.split(" && ")[0]};\n` +
+          `    // Next step\n` +
+          `    assert ${assertion};`;
+      
+      // Insert the new assertions before the current one
+      workspaceEdit.insert(
+          document.uri,
+          new Position(selection.start.line, 0),
+          intermediateAssert + '\n'
+      );
+
+      // Apply the edit
+      await workspace.applyEdit(workspaceEdit);
+
+      // Trigger verification
+      await commands.executeCommand(DafnyCommands.Build);
+
+      window.showInformationMessage("Added intermediate assertions. Verifying...");
+      return null; // Return null to prevent LSP handling
+    }
+
+    // Otherwise, pass to server as normal
     return client.generateSketch({ 
       prompt: prompt,
       content: content, 
