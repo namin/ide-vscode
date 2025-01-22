@@ -194,18 +194,18 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
       this.outputChannel.appendLine('No active editor, skipping diagnostic handling');
       return;
     } else {
-      this.outputChannel.appendLine('Editor OK.');
+      //this.outputChannel.appendLine('Editor OK.');
     }
 
-    this.outputChannel.appendLine(`DEBUG: Checking document key...`);
+    //this.outputChannel.appendLine(`DEBUG: Checking document key...`);
     const docKey = this.docKey(editor.document);
-    this.outputChannel.appendLine(`DEBUG: Document Key: ${docKey || "UNDEFINED"}`);
+    //this.outputChannel.appendLine(`DEBUG: Document Key: ${docKey || "UNDEFINED"}`);
     const state = this.getAssertDivideStates(docKey);
     if(!state) {
       this.outputChannel.appendLine('handleDiagnosticChange: No state...');
       return;
     } else {
-      this.outputChannel.appendLine('State OK.');
+      //this.outputChannel.appendLine('State OK.');
     }
 
     // Get verification status
