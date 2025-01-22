@@ -88,7 +88,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
       const result = await client.generateSketch({
         prompt,
         content: editor.document.getText(),
-        sketchType: 'ai',
+        sketchType: 'ai_whole',
         position: new Position(state.targetAssertion.line, 0),
         textDocument: { uri: editor.document.uri.toString() }
       });
