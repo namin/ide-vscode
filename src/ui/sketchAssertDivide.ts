@@ -189,13 +189,14 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
 
   private static async handleDiagnosticsChange(client: DafnyLanguageClient) {
     this.outputChannel.appendLine('...');
-    const editor = window.activeTextEditor;
+    let editor = window.activeTextEditor;
     if(!editor) {
       this.outputChannel.appendLine('No active editor, skipping diagnostic handling');
       return;
     } else {
       //this.outputChannel.appendLine('Editor OK.');
     }
+    editor = await this.focusDocument(editor);
 
     //this.outputChannel.appendLine(`DEBUG: Checking document key...`);
     const docKey = this.docKey(editor.document);
@@ -229,8 +230,8 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
         //.filter(d => d.message.includes('could not be proved') || d.message.includes('assertion might not hold'))
         .map(d => d.range.start.line)
     );
-
     this.outputChannel.appendLine(`\nDiagnostic check:\n  Target assertion at line ${state.targetAssertion.line}\n  Current attempt at line ${state.attempt?.line}\n  Verification errors at lines: ${[...verificationErrors].join(', ')}`);
+    this.outputChannel.appendLine(this.prettyCode(editor.document.getText()));
 
     // Check if target assertion verifies
     let targetOK = false;
@@ -340,5 +341,12 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     }
 
     return context;
+  }
+
+  private static prettyCode(text: string): string {
+    return text
+      .split("\n")
+      .map((line, index) => `l. ${index + 1}: ${line}`)
+      .join("\n");
   }
 }
