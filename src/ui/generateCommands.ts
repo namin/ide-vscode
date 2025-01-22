@@ -85,6 +85,75 @@ export default class GenerateCommands {
     await this.generateAssertAtLine(client, editor, nextLine);
   }
 
+  private static async handleAssertDivide(editor: TextEditor, document: any): Promise<any> {
+    this.outputChannel.appendLine('\n=== Starting new assert-divide operation ===');
+    window.showInformationMessage('Starting assert-divide');
+    
+    const assertInfo = await this.extractAssertInfo(editor);
+    if (!assertInfo) {
+      return null;
+    }
+
+    // Store initial state for verification feedback
+    const documentUri = document.uri.toString();
+    const currentDiagnostics = this.diagnosticsListener.get(document.uri) || [];
+    this.outputChannel.appendLine(`Initial diagnostics count: ${currentDiagnostics.length}`);
+    this.assertDivideStates.set(documentUri, {
+      attemptedLines: new Set([assertInfo.line]),
+      originalDiagnostics: [...currentDiagnostics]
+    });
+
+    await this.insertIntermediateAssertions(document, assertInfo);
+    await this.triggerVerification();
+
+    window.showInformationMessage("Added intermediate assertions. Verifying...");
+    return null;
+  }
+
+  private static async extractAssertInfo(editor: TextEditor): Promise<{line: number, assertion: string} | null> {
+    const selection = editor.selection;
+    const currentLine = editor.document.lineAt(selection.start.line);
+    const text = currentLine.text;
+
+    if (!text.trim().startsWith("assert")) {
+      window.showInformationMessage("Please place cursor on an assert statement");
+      return null;
+    }
+
+    const assertMatch = text.match(/assert\s+(.*?);/);
+    if (!assertMatch) {
+      return null;
+    }
+
+    return {
+      line: selection.start.line,
+      assertion: assertMatch[1]
+    };
+  }
+
+  private static async insertIntermediateAssertions(document: any, assertInfo: {line: number, assertion: string}): Promise<void> {
+    const workspaceEdit = new WorkspaceEdit();
+    
+    // For now, simple && splitting. Later we can make this smarter based on verification feedback
+    const intermediateAssert = 
+        `    // Intermediate step\n` +
+        `    assert ${assertInfo.assertion.split(" && ")[0]};\n` +
+        `    // Next step\n` +
+        `    assert ${assertInfo.assertion};`;
+    
+    workspaceEdit.insert(
+        document.uri,
+        new Position(assertInfo.line, 0),
+        intermediateAssert + '\n'
+    );
+
+    await workspace.applyEdit(workspaceEdit);
+  }
+
+  private static async triggerVerification(): Promise<void> {
+    await commands.executeCommand(DafnyCommands.Build);
+  }
+
   private static findNextAssertLine(editor: TextEditor, state: AssertDivideState): number | null {
     const startLine = state.lastGeneratedLine || 0;
     const endLine = editor.document.lineCount;
@@ -155,66 +224,11 @@ export default class GenerateCommands {
       return null;
     }
 
-    // Initialize state for assert-divide strategy
-    if (sketchType === 'assert_divide') {
-      this.outputChannel.appendLine('\n=== Starting new assert-divide operation ===');
-      const documentUri = document.uri.toString();
-      const currentDiagnostics = this.diagnosticsListener.get(document.uri) || [];
-      this.outputChannel.appendLine(`Initial diagnostics count: ${currentDiagnostics.length}`);
-      this.assertDivideStates.set(documentUri, {
-        attemptedLines: new Set(),
-        originalDiagnostics: [...currentDiagnostics]
-      });
-    }
 
     // Check if this is an IDE-specific type
     if (sketchType === 'assert_divide') {
-      // Handle assert-divide
-      window.showInformationMessage('Starting assert-divide');
-      const selection = editor.selection;
-      
-      // Get the current assertion and its context
-      const currentLine = editor.document.lineAt(selection.start.line);
-      const text = currentLine.text;
+      return await this.handleAssertDivide(editor, document);
 
-      // Check if we're on an assert statement
-      if (!text.trim().startsWith("assert")) {
-        window.showInformationMessage("Please place cursor on an assert statement");
-        return null;
-      }
-
-      // Extract the assertion expression
-      const assertMatch = text.match(/assert\s+(.*?);/);
-      if (!assertMatch) {
-        return null;
-      }
-      const assertion = assertMatch[1];
-
-      // Create a workspace edit to insert intermediate assertions
-      const workspaceEdit = new WorkspaceEdit();
-      
-      // Insert intermediate assertions with a placeholder
-      const intermediateAssert = 
-          `    // Intermediate step\n` +
-          `    assert ${assertion.split(" && ")[0]};\n` +
-          `    // Next step\n` +
-          `    assert ${assertion};`;
-      
-      // Insert the new assertions before the current one
-      workspaceEdit.insert(
-          document.uri,
-          new Position(selection.start.line, 0),
-          intermediateAssert + '\n'
-      );
-
-      // Apply the edit
-      await workspace.applyEdit(workspaceEdit);
-
-      // Trigger verification
-      await commands.executeCommand(DafnyCommands.Build);
-
-      window.showInformationMessage("Added intermediate assertions. Verifying...");
-      return null; // Return null to prevent LSP handling
     }
 
     // Otherwise, pass to server as normal
