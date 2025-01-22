@@ -169,11 +169,12 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     // Get verification status
     const diagnostics: Diagnostic[] = [];
     for (const [uri, uriDiagnostics] of languages.getDiagnostics()) {
+      this.outputChannel.appendLine(`errors for ${uri}`)
       uriDiagnostics.forEach(error => {
+        this.outputChannel.appendLine(`l. ${error.range.start.line}: ${error.message}`);
         diagnostics.push(error);
       });
     }
-    this.outputChannel.appendLine(`All diagnostics errors: ${[...diagnostics].join(', ')}`);
 
     const verificationErrors = new Set(
       diagnostics
