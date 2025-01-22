@@ -8,7 +8,6 @@ interface AssertDivideState {
   depth: number;
   attempt?: { line: number, assertion: string };
   verifiedAssertions: { line: number, assertion: string }[];
-  uri: string;
 }
 
 export default class SketchAssertDivide {
@@ -31,14 +30,17 @@ export default class SketchAssertDivide {
     return new SketchAssertDivide();
   }
 
-  private static getAssertDivideStates(uri: string): AssertDivideState | undefined {
-    return this.assertDivideStates.get("global");
+  private static getAssertDivideStates(key: string): AssertDivideState | undefined {
+    return this.assertDivideStates.get(key);
   }
-  private static deleteAssertDivideStates(uri: string) {
-    this.assertDivideStates.delete("global");
+  private static deleteAssertDivideStates(key: string) {
+    this.assertDivideStates.delete(key);
   }
-  private static setAssertDivideStates(uri: string, state: AssertDivideState) {
-    this.assertDivideStates.set("global", state);
+  private static setAssertDivideStates(key: string, state: AssertDivideState) {
+    this.assertDivideStates.set(key, state);
+  }
+  private static docKey(document: any): string {
+    return document.uri.fsPath.toString();
   }
   
 
@@ -96,23 +98,15 @@ Target assertion: ${state.targetAssertion.assertion}
 Provide just the assertion without 'assert' keyword or semicolon.`;
 
     try {
-      const document = workspace.textDocuments.find(doc => doc.uri.fsPath === state.uri);
-      let content;
-      if (document) {
-        await document.save();
-        this.outputChannel.appendLine('Document saved before next step');
-        content = document.getText();
-      } else {
-        content = editor.document.getText();
-      }
+      const content = editor.document.getText();
       this.outputChannel.appendLine("Content for AI:" + content);
 
       const result = await client.generateSketch({
         prompt,
-        content: editor.document.getText(),
+        content: content,
         sketchType: 'ai_whole',
         position: new Position(state.targetAssertion.line, 0),
-        textDocument: { uri: state.uri }
+        textDocument: {uri: editor.document.uri.fsPath}
       });
 
       if(result?.sketch) {
@@ -178,30 +172,23 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
       return;
     }
 
-    const documentUri = editor.document.uri.toString();
-    this.outputChannel.appendLine("URI: " + documentUri);
-    const state = this.getAssertDivideStates(documentUri);
+    const docKey = this.docKey(document);
+    const state = this.getAssertDivideStates(docKey);
     if(!state) {
       this.outputChannel.appendLine('handleDiagnosticChange: No state...');
-      // Only log if we have verification errors
-      const currentDiagnostics = this.diagnosticsListener.get(editor.document.uri) || [];
-      const verificationDiagnostics = currentDiagnostics.filter(d =>
-        d.message.includes('could not be proved')
-        || d.message.includes('assertion might not hold'));
-      if(verificationDiagnostics.length > 0) {
-        this.outputChannel.appendLine('Got verification errors but no assert-divide state active');
-      }
       return;
     }
 
     // Get verification status
     const diagnostics: Diagnostic[] = [];
     for (const [uri, uriDiagnostics] of languages.getDiagnostics()) {
-      this.outputChannel.appendLine(`errors for ${uri}`)
-      uriDiagnostics.forEach(error => {
-        this.outputChannel.appendLine(`l. ${error.range.start.line}: ${error.message}`);
-        diagnostics.push(error);
-      });
+      if (uri.fsPath === docKey) {
+         this.outputChannel.appendLine(`errors for ${uri}`)
+         uriDiagnostics.forEach(error => {
+         this.outputChannel.appendLine(`l. ${error.range.start.line}: ${error.message}`);
+         diagnostics.push(error);
+        });
+      }
     }
 
     const verificationErrors = new Set(
@@ -233,24 +220,24 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
           state.verifiedAssertions.push(state.targetAssertion);
           state.targetAssertion = state.attempt;
           state.attempt = undefined;
-          await this.tryAssertStep(client, editor, documentUri);
+          await this.tryAssertStep(client, editor, docKey);
         } else if(newOK) {
           this.outputChannel.appendLine('Bingo!');
           window.showInformationMessage('Assert-divide: Successfully verified target assertion!');
-          this.deleteAssertDivideStates(documentUri);
+          this.deleteAssertDivideStates(docKey);
         } else {
           // Need to try a different intermediate assertion
           this.outputChannel.appendLine('Intermediate assertion failed to verify or help, trying again');
           this.commentOutLine(editor, state.attempt.line);
-          await this.tryAssertStep(client, editor, documentUri);
+          await this.tryAssertStep(client, editor, docKey);
         }
       }
     } else if(targetOK) {
-      this.outputChannel.appendLine('No intermediate assertion and target not verifying.');
-      this.deleteAssertDivideStates(documentUri);
+      this.outputChannel.appendLine('No intermediate assertion and target verifying. OK! Stopping.');
+      this.deleteAssertDivideStates(docKey);
     } else {
-      this.outputChannel.appendLine('No intermediate assertion and target not verifying.');
-      this.deleteAssertDivideStates(documentUri);
+      this.outputChannel.appendLine('No intermediate assertion and target not verifying. Oops! Stopping.');
+      this.deleteAssertDivideStates(docKey);
     }
   }
 
@@ -267,12 +254,11 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     this.outputChannel.appendLine(`Found assertion: ${assertInfo.assertion} at line ${assertInfo.line}`);
 
     // Initialize state with our target assertion
-    const uri = document.uri.fsPath.toString();
+    const uri = this.docKey(document);
     this.setAssertDivideStates(uri, {
       targetAssertion: assertInfo,
       depth: 0,
-      verifiedAssertions: [],
-      uri: uri
+      verifiedAssertions: []
     });
 
     // Start the recursive process
