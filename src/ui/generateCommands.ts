@@ -34,8 +34,19 @@ export default class GenerateCommands {
     return new GenerateCommands();
   }
 
+  private static getAssertDivideStates(uri: string): AssertDivideState | undefined {
+    return this.assertDivideStates.get("global");
+  }
+  private static deleteAssertDivideStates(uri: string) {
+    this.assertDivideStates.delete("global");
+  }
+  private static setAssertDivideStates(uri: string, state: AssertDivideState) {
+    this.assertDivideStates.set("global", state);
+  }
+  
+
   private static async tryAssertStep(client: DafnyLanguageClient, editor: TextEditor, documentUri: string) {
-    const state = this.assertDivideStates.get(documentUri);
+    const state = this.getAssertDivideStates(documentUri);
     this.outputChannel.appendLine("URI: " + documentUri);
     if(!state) {
       return;
@@ -44,7 +55,7 @@ export default class GenerateCommands {
     if(state.depth > 5) {
       this.outputChannel.appendLine('Maximum depth reached');
       window.showInformationMessage('Assert-divide: Max depth reached without success');
-      this.assertDivideStates.delete(documentUri);
+      this.deleteAssertDivideStates(documentUri);
       return;
     }
 
@@ -55,7 +66,7 @@ export default class GenerateCommands {
     const intermediate = await this.generateIntermediateAssertion(client, editor, state);
     if(!intermediate) {
       this.outputChannel.appendLine('Failed to generate intermediate assertion');
-      this.assertDivideStates.delete(documentUri);
+      this.deleteAssertDivideStates(documentUri);
       return;
     }
 
@@ -140,7 +151,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
 
     const documentUri = editor.document.uri.toString();
     this.outputChannel.appendLine("URI: " + documentUri);
-    const state = this.assertDivideStates.get(documentUri);
+    const state = this.getAssertDivideStates(documentUri);
     if(!state) {
       // Only log if we have verification errors
       const currentDiagnostics = this.diagnosticsListener.get(editor.document.uri) || [];
@@ -167,7 +178,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     if(!verificationErrors.has(state.targetAssertion.line)) {
       this.outputChannel.appendLine('Target assertion verified!');
       window.showInformationMessage('Assert-divide: Successfully verified target assertion!');
-      this.assertDivideStates.delete(documentUri);
+      this.deleteAssertDivideStates(documentUri);
       return;
     }
 
@@ -201,7 +212,7 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
 
     // Initialize state with our target assertion
     const documentUri = document.uri.toString();
-    this.assertDivideStates.set(documentUri, {
+    this.setAssertDivideStates(documentUri, {
       targetAssertion: assertInfo,
       depth: 0,
       verifiedAssertions: []
