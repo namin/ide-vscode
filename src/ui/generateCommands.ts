@@ -177,28 +177,45 @@ Provide just the assertion without 'assert' keyword or semicolon.`;
     this.outputChannel.appendLine(`\nDiagnostic check:\n  Target assertion at line ${state.targetAssertion.line}\n  Current attempt at line ${state.attempt?.line}\n  Verification errors at lines: ${[...verificationErrors].join(', ')}`);
 
     // Check if target assertion verifies
+    let targetOK = false;
     if(!verificationErrors.has(state.targetAssertion.line)) {
       this.outputChannel.appendLine('Target assertion verified!');
-      window.showInformationMessage('Assert-divide: Successfully verified target assertion!');
-      this.deleteAssertDivideStates(documentUri);
-      return;
-    }
-
+      targetOK = true;
+    } 
     // Check if current attempt verifies
-    if (state.attempt && !verificationErrors.has(state.attempt.line)) {
-      // Intermediate assertion verifies - make it our new target and continue upward
-      this.outputChannel.appendLine('Intermediate assertion verified, moving up');
-      state.verifiedAssertions.push(state.targetAssertion);
-      state.targetAssertion = state.attempt;
-      state.attempt = undefined;
-      await this.tryAssertStep(client, editor, documentUri);
+    if(state.attempt) {
+      let newOK = false;
+      if(!verificationErrors.has(state.attempt.line)) {
+        this.outputChannel.appendLine('Intermediate assertion verified');
+        newOK = true;
+      } else {
+        this.outputChannel.appendLine('Intermediate assertion failed');
+      }
+      if(targetOK) {
+        if(!newOK) {
+          // moving up
+          state.verifiedAssertions.push(state.targetAssertion);
+          state.targetAssertion = state.attempt;
+          state.attempt = undefined;
+          await this.tryAssertStep(client, editor, documentUri);
+        } else if(newOK) {
+          this.outputChannel.appendLine('Bingo!');
+          window.showInformationMessage('Assert-divide: Successfully verified target assertion!');
+          this.deleteAssertDivideStates(documentUri);
+        } else {
+          // Need to try a different intermediate assertion
+          this.outputChannel.appendLine('Intermediate assertion failed to verify or help, trying again');
+          await this.tryAssertStep(client, editor, documentUri);
+        }
+      }
+    } else if(targetOK) {
+      this.outputChannel.appendLine('No intermediate assertion and target not verifying.');
+      this.deleteAssertDivideStates(documentUri);
     } else {
-      // Need to try a different intermediate assertion
-      this.outputChannel.appendLine('Intermediate assertion failed to verify or help, trying again');
-      await this.tryAssertStep(client, editor, documentUri);
+      this.outputChannel.appendLine('No intermediate assertion and target not verifying.');
+      this.deleteAssertDivideStates(documentUri);
     }
   }
-
 
   private static async handleAssertDivide(editor: TextEditor, document: any, client: DafnyLanguageClient): Promise<any> {
     this.outputChannel.appendLine('\n=== Starting new assert-divide operation ===');
