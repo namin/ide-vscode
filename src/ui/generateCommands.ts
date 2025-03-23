@@ -30,7 +30,7 @@ export default class GenerateCommands {
     }
 
     let prompt = undefined;
-    if(sketchType === 'ai') {
+    if(sketchType.startsWith('ai')) {
       prompt = await window.showInputBox({
         prompt: 'Enter your AI prompt',
         placeHolder: 'Describe what you want to generate'
