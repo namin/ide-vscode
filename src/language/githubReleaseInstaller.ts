@@ -19,8 +19,18 @@ function getDafnyPlatformSuffix(version: string): string {
   // Since every nightly published after this edit will be configured in the post-3.12 fashion, and this script
   // fetches the latest nightly, it's safe to just condition this on 'nightly' and not 'nightly-date' for a date
   // after a certain point.
+  const post411 = version.includes('nightly') || configuredVersionToNumeric(version) >= configuredVersionToNumeric('4.11');
   const post312 = version.includes('nightly') || configuredVersionToNumeric(version) >= configuredVersionToNumeric('3.13');
-  if(post312) {
+  if(post411) {
+    switch(os.type()) {
+    case 'Windows_NT':
+      return 'windows-2022';
+    case 'Darwin':
+      return 'macos-13';
+    default:
+      return 'ubuntu-22.04';
+    }
+  } else if(post312) {
     switch(os.type()) {
     case 'Windows_NT':
       return 'windows-2019';
@@ -116,7 +126,55 @@ export class GitHubReleaseInstaller {
     const baseUri = LanguageServerConstants.DownloadBaseUri;
     const [ tag, version ] = await this.getConfiguredTagAndVersion();
     const suffix = getDafnyPlatformSuffix(version);
-    return `${baseUri}/${tag}/dafny-${version}-${os.arch()}-${suffix}.zip`;
+    const arch = await this.getDotnetArchitecture();
+    return `${baseUri}/${tag}/dafny-${version}-${arch}-${suffix}.zip`;
+  }
+
+  private async getDotnetArchitecture(): Promise<string> {
+    if(os.type() === 'Darwin') {
+      // On macOS, detect .NET runtime architecture to handle Rosetta translation
+      // This is crucial because ARM64 Macs may run .NET in x64 mode via Rosetta
+      try {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+
+        // First try to get .NET runtime architecture
+        const { stdout } = await execAsync('dotnet --info');
+
+        // Look for RID (Runtime Identifier) which shows the actual .NET runtime architecture
+        const ridRegex = /RID:\s*osx-(x64|arm64)/;
+        const ridMatch = ridRegex.exec(stdout);
+        if(ridMatch) {
+          this.writeStatus(`Detected .NET RID: osx-${ridMatch[1]}`);
+          return ridMatch[1]; // Returns 'x64' or 'arm64'
+        }
+
+        // Fallback: look for Architecture field
+        const archRegex = /Architecture:\s*(x64|Arm64)/i;
+        const archMatch = archRegex.exec(stdout);
+        if(archMatch) {
+          const detectedArch = archMatch[1].toLowerCase() === 'arm64' ? 'arm64' : 'x64';
+          this.writeStatus(`Detected .NET Architecture: ${detectedArch}`);
+          return detectedArch;
+        }
+
+        this.writeStatus('Could not parse .NET architecture from dotnet --info output');
+        this.writeStatus('Falling back to system architecture detection');
+
+        // Fallback to system architecture detection using same execAsync
+        const { stdout: systemStdout } = await execAsync('uname -m');
+        const systemArch = systemStdout.trim();
+        return systemArch === 'x86_64' ? 'x64' : systemArch === 'arm64' ? 'arm64' : 'x64';
+      } catch(error: unknown) {
+        this.writeStatus(`Failed to detect architecture: ${error}`);
+        this.writeStatus('Falling back to Node.js process architecture detection');
+        return os.arch();
+      }
+    }
+
+    // For non-macOS systems, use Node.js detection (preserve original behavior)
+    return os.arch();
   }
 
   public async getConfiguredVersion(): Promise<string> {
